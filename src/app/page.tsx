@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState } from "react";
 
 type Choice = {
@@ -146,6 +147,7 @@ export default function Home() {
   const [reefHealth, setReefHealth] = useState(64);
   const [protection, setProtection] = useState(8.4);
   const [awareness, setAwareness] = useState(42);
+  const [isPosterOpen, setIsPosterOpen] = useState(false);
   const [message, setMessage] = useState(
     "The ocean is absorbing the cost of daily choices. Change the choices, change the tide.",
   );
@@ -279,6 +281,25 @@ export default function Home() {
                           className={`h-full rounded-full bg-gradient-to-r ${item.tone}`}
                           style={{ width: `${item.label === "Protection" ? (item.value / 30) * 100 : item.value}%` }}
                         />
+
+                  <button
+                    type="button"
+                    onClick={() => setIsPosterOpen(true)}
+                    className="mt-5 block w-full overflow-hidden rounded-3xl border border-white/10 bg-black/20 text-left shadow-[0_16px_50px_rgba(0,0,0,0.25)] transition hover:-translate-y-0.5 hover:border-cyan-300/30 hover:bg-white/8"
+                    aria-label="Open the poster image in a centered view"
+                  >
+                    <div className="border-b border-white/10 px-4 py-3">
+                      <p className="text-xs uppercase tracking-[0.28em] text-cyan-200/80">Poster preview</p>
+                      <p className="mt-1 text-sm text-slate-300">Click to view larger in the center of the screen.</p>
+                    </div>
+                    <Image
+                      src="/ocean-poster-screenshot.png"
+                      alt="Poster about saving life under water"
+                      width={1079}
+                      height={715}
+                      className="h-auto w-full object-cover"
+                    />
+                  </button>
                       </div>
                     </div>
                   ))}
@@ -535,6 +556,36 @@ export default function Home() {
             <p>SDG 14.1 awareness site</p>
           </div>
         </footer>
+
+        {isPosterOpen ? (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-6 backdrop-blur-md"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Poster image viewer"
+            onClick={() => setIsPosterOpen(false)}
+          >
+            <div
+              className="relative w-full max-w-5xl overflow-hidden rounded-[2rem] border border-white/15 bg-[color:var(--panel-strong)] shadow-[0_30px_120px_rgba(0,0,0,0.6)]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setIsPosterOpen(false)}
+                className="absolute right-4 top-4 rounded-full border border-white/15 bg-black/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-black/60"
+              >
+                Close
+              </button>
+              <Image
+                src="/ocean-poster-screenshot.png"
+                alt="Large poster about saving life under water"
+                width={1079}
+                height={715}
+                className="max-h-[88vh] w-full object-contain"
+              />
+            </div>
+          </div>
+        ) : null}
       </section>
     </main>
   );
