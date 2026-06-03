@@ -19,7 +19,6 @@ type Scenario = {
   context: string;
   choices: Choice[];
 };
-
 const statCards = [
   {
     label: "Plastic entering the ocean each year",
