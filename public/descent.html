@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Descent — a scroll-bound journey to the ocean floor</title>
+<meta name="description" content="A scroll-driven SVG path animation: follow a bioluminescent light through the ocean's depths. SDG 14.1." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* ============================================================
+     THEME TOKENS
+     The background colour is driven live by JS via these vars, so
+     the whole page tints continuously as you sink toward the abyss.
+     ============================================================ */
+  :root {
+    --bg-top: #2fe6c8;
+    --bg-bottom: #0a6c8f;
+    --ink: #eaf6ff;
+    --bead: #b9fff0;
+    --font-display: "Fraunces", Georgia, serif;
+    --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--font-body);
+    color: var(--ink);
+    /* Two stacked layers: a slow vertical gradient (set by JS) plus a
+       couple of static radial glows for depth. */
+    background:
+      radial-gradient(circle at 80% 8%, rgba(255,255,255,0.10), transparent 30%),
+      radial-gradient(circle at 12% 88%, rgba(120,180,255,0.10), transparent 36%),
+      linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+    background-attachment: fixed;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    transition: --bg-top 0.2s linear, --bg-bottom 0.2s linear;
+  }
+
+  /* ---- Drifting plankton / dust field (cheap parallax depth) ---- */
+  .dust {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      radial-gradient(1.5px 1.5px at 20% 30%, rgba(255,255,255,.5), transparent),
+      radial-gradient(1.5px 1.5px at 70% 60%, rgba(255,255,255,.35), transparent),
+      radial-gradient(1px 1px at 40% 80%, rgba(255,255,255,.4), transparent),
+      radial-gradient(1px 1px at 85% 20%, rgba(255,255,255,.3), transparent),
+      radial-gradient(2px 2px at 55% 45%, rgba(255,255,255,.25), transparent);
+    background-size: 100% 100%;
+    opacity: .5;
+    animation: drift 26s linear infinite alternate;
+  }
+  @keyframes drift { from { transform: translateY(0) } to { transform: translateY(-40px) } }
+
+  /* ============================================================
+     INTRO + OUTRO (full-viewport bookends)
+     ============================================================ */
+  .screen {
+    position: relative; z-index: 2;
+    min-height: 100vh;
+    display: grid; place-items: center;
+    text-align: center; padding: 2rem;
+  }
+  .kicker {
+    text-transform: uppercase; letter-spacing: .42em; font-size: .72rem;
+    color: rgba(255,255,255,.78); margin-bottom: 1.4rem;
+    display: inline-flex; align-items: center; gap: .7rem;
+  }
+  .kicker::before { content:""; width:6px; height:6px; border-radius:50%; background: var(--bead); box-shadow:0 0 12px var(--bead); }
+  .intro h1 {
+    font-family: var(--font-display);
+    font-size: clamp(2.6rem, 8vw, 6.5rem);
+    line-height: .98; font-weight: 600; max-width: 14ch;
+    text-shadow: 0 8px 60px rgba(0,0,0,.35);
+  }
+  .intro p { margin-top: 1.6rem; max-width: 46ch; font-size: 1.05rem; line-height: 1.7; color: rgba(255,255,255,.82); }
+  .scroll-cue {
+    margin-top: 3rem; display: inline-flex; flex-direction: column; align-items: center;
+    gap: .6rem; font-size: .75rem; letter-spacing: .25em; text-transform: uppercase;
+    color: rgba(255,255,255,.7);
+  }
+  .scroll-cue span {
+    width: 26px; height: 42px; border: 2px solid rgba(255,255,255,.4); border-radius: 14px;
+    position: relative;
+  }
+  .scroll-cue span::after {
+    content:""; position:absolute; left:50%; top:8px; width:4px; height:8px; border-radius:4px;
+    background: var(--bead); transform: translateX(-50%);
+    animation: wheel 1.6s ease-in-out infinite;
+  }
+  @keyframes wheel { 0%{opacity:0;transform:translate(-50%,0)} 30%{opacity:1} 100%{opacity:0;transform:translate(-50%,16px)} }
+
+  /* ============================================================
+     THE SPINE
+     A tall (600vh) scroll track. Inside it a sticky 100vh stage
+     pins the SVG + canvas + text while we scroll *through* it.
+     "Progress through the spine" (0..1) is what drives everything.
+     ============================================================ */
+  .spine { position: relative; height: 600vh; z-index: 1; }
+
+  .stage {
+    position: sticky; top: 0; height: 100vh; overflow: hidden;
+    display: grid; place-items: center;
+  }
+
+  /* The SVG keeps its aspect ratio and fits the viewport height. */
+  .path-svg {
+    height: 92vh; width: auto; max-width: 100%;
+    overflow: visible; z-index: 2;
+  }
+
+  /* Particle trail canvas, painted in screen-space on top of the SVG. */
+  .fx { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+
+  /* ---- Depth read-out (top-left HUD) ---- */
+  .hud {
+    position: absolute; z-index: 4; top: 26px; left: 26px;
+    font-variant-numeric: tabular-nums;
+  }
+  .hud .label { font-size:.66rem; letter-spacing:.32em; text-transform:uppercase; color:rgba(255,255,255,.6); }
+  .hud .depth { font-family: var(--font-display); font-size: 2.4rem; line-height:1; margin-top:.3rem; }
+  .hud .zone  { margin-top:.4rem; font-size:.8rem; letter-spacing:.12em; color: var(--bead); text-shadow:0 0 14px var(--bead); }
+
+  /* ---- Vertical progress rail (right edge) ---- */
+  .rail { position:absolute; z-index:4; top:50%; right:26px; transform:translateY(-50%);
+          height: 46vh; width: 2px; background: rgba(255,255,255,.16); border-radius:2px; }
+  .rail .fill { position:absolute; top:0; left:0; width:100%; height:0%;
+                background: linear-gradient(180deg, var(--bead), transparent);
+                box-shadow: 0 0 12px var(--bead); border-radius:2px; }
+
+  /* ============================================================
+     ZONE CARDS — crossfade in/out as the bead passes each node.
+     Only one is "active" at a time; .active is toggled by JS.
+     ============================================================ */
+  .zone-card {
+    position: absolute; z-index: 4; width: min(34ch, 80vw); top: 50%;
+    transform: translateY(-50%);
+    opacity: 0; visibility: hidden;
+    transition: opacity .7s ease, visibility .7s;
+    pointer-events: none;
+  }
+  .zone-card.left  { left: 7vw;  text-align: left; }
+  .zone-card.right { right: 7vw; text-align: right; }
+  .zone-card.active { opacity: 1; visibility: visible; }
+
+  /* staggered reveal of inner lines once active */
+  .zone-card .reveal { opacity:0; transform: translateY(22px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1); }
+  .zone-card.active .reveal { opacity:1; transform: none; }
+  .zone-card.active .reveal:nth-child(2){ transition-delay:.08s }
+  .zone-card.active .reveal:nth-child(3){ transition-delay:.16s }
+  .zone-card.active .reveal:nth-child(4){ transition-delay:.24s }
+
+  .zone-card .tag {
+    display:inline-block; font-size:.66rem; letter-spacing:.3em; text-transform:uppercase;
+    padding:.4rem .8rem; border-radius:999px; border:1px solid rgba(255,255,255,.25);
+    background: rgba(255,255,255,.08); backdrop-filter: blur(8px); margin-bottom: 1rem;
+  }
+  .zone-card h2 { font-family: var(--font-display); font-size: clamp(2rem,4.5vw,3.4rem); line-height:1; font-weight:600; }
+  .zone-card .range { margin-top:.5rem; font-size:.85rem; color: var(--bead); letter-spacing:.1em; text-shadow:0 0 12px var(--bead); }
+  .zone-card p { margin-top:1rem; font-size:1.02rem; line-height:1.7; color: rgba(255,255,255,.86); }
+  .zone-card .stat { margin-top:1.2rem; font-family:var(--font-display); font-size:1.9rem; }
+  .zone-card .stat small { display:block; font-family:var(--font-body); font-size:.8rem; letter-spacing:.04em; color:rgba(255,255,255,.7); margin-top:.25rem; }
+
+  .outro h2 { font-family: var(--font-display); font-size: clamp(2.2rem,6vw,4.5rem); line-height:1; font-weight:600; max-width:16ch; }
+  .outro p { margin-top:1.4rem; max-width:50ch; line-height:1.7; color:rgba(255,255,255,.82); }
+  .outro a {
+    margin-top: 2rem; display:inline-block; text-decoration:none; color:#04141a;
+    background: var(--bead); padding:.9rem 1.6rem; border-radius:999px; font-weight:600;
+    box-shadow: 0 0 30px rgba(185,255,240,.5); transition: transform .25s ease;
+  }
+  .outro a:hover { transform: translateY(-2px); }
+
+  @media (max-width: 640px) {
+    .zone-card.left, .zone-card.right { left:50%; right:auto; transform: translate(-50%,-50%); text-align:center; width:84vw; }
+    .rail { display:none; }
+  }
+
+  /* Respect users who prefer reduced motion: JS also snaps instead of lerps. */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .dust, .scroll-cue span::after { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="dust" aria-hidden="true"></div>
+
+  <!-- ============ INTRO ============ -->
+  <header class="screen intro">
+    <div>
+      <span class="kicker">SDG 14.1 · Life below water</span>
+      <h1>Follow the light into the deep.</h1>
+      <p>Most of the ocean has never seen sunlight — yet our pollution reaches every layer of it. Scroll to descend, and watch where it all ends up.</p>
+      <div class="scroll-cue"><span></span>Scroll to descend</div>
+    </div>
+  </header>
+
+  <!-- ============ THE SPINE (scroll-bound stage) ============ -->
+  <section class="spine">
+    <div class="stage">
+      <!-- Depth HUD -->
+      <div class="hud">
+        <div class="label">Depth</div>
+        <div class="depth"><span id="depth">0</span> m</div>
+        <div class="zone" id="zoneName">Surface</div>
+      </div>
+
+      <!-- Progress rail -->
+      <div class="rail"><div class="fill" id="railFill"></div></div>
+
+      <!-- The path + the moving bead live in this SVG.
+           viewBox is portrait (600 x 1000); the bead is positioned in
+           these same user units, so no coordinate maths is needed. -->
+      <svg class="path-svg" viewBox="0 0 600 1000" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        <defs>
+          <!-- soft glow for the path and bead -->
+          <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="6" result="b" />
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <!-- gradient along the trail -->
+          <linearGradient id="trailGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"  stop-color="#9ff7e6"/>
+            <stop offset="50%" stop-color="#56b8ff"/>
+            <stop offset="100%" stop-color="#8a7bff"/>
+          </linearGradient>
+          <radialGradient id="beadGrad">
+            <stop offset="0%"  stop-color="#ffffff"/>
+            <stop offset="35%" stop-color="var(--bead)"/>
+            <stop offset="100%" stop-color="rgba(120,200,255,0)"/>
+          </radialGradient>
+        </defs>
+
+        <!-- faint full path (always visible) -->
+        <path id="trailBg" d="" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="2.5" stroke-linecap="round"/>
+        <!-- bright path that "draws in" as you scroll (dash trick) -->
+        <path id="trail"   d="" fill="none" stroke="url(#trailGrad)" stroke-width="3.5" stroke-linecap="round" filter="url(#glow)"/>
+
+        <!-- node markers get injected here by JS -->
+        <g id="nodes"></g>
+
+        <!-- the moving bead (positioned via transform in user units) -->
+        <g id="bead" filter="url(#glow)">
+          <circle r="26" fill="url(#beadGrad)" opacity="0.55"/>
+          <circle r="10" fill="url(#beadGrad)"/>
+          <circle r="3.5" fill="#ffffff"/>
+        </g>
+      </svg>
+
+      <!-- particle FX -->
+      <canvas class="fx" id="fx"></canvas>
+
+      <!-- ZONE CARDS -->
+      <article class="zone-card left" data-zone="0">
+        <span class="tag reveal">Epipelagic · 0–200 m</span>
+        <h2 class="reveal">The Sunlight Zone</h2>
+        <div class="range reveal">where 80% of marine life lives</div>
+        <p class="reveal">Light still reaches here, and so does most of our waste. Floating plastic gathers in vast surface gyres before it ever begins to sink.</p>
+        <div class="stat reveal">5–12M tonnes<small>of plastic enter the ocean every single year</small></div>
+      </article>
+
+      <article class="zone-card right" data-zone="1">
+        <span class="tag reveal">Mesopelagic · 200–1,000 m</span>
+        <h2 class="reveal">The Twilight Zone</h2>
+        <div class="range reveal">faint blue, never bright</div>
+        <p class="reveal">As plastic breaks into microplastics it sinks. Zooplankton eat the fragments, pulling pollution straight into the base of the food web.</p>
+        <div class="stat reveal">Microplastics<small>now found in marine life at every measured depth</small></div>
+      </article>
+
+      <article class="zone-card left" data-zone="2">
+        <span class="tag reveal">Bathypelagic · 1,000–4,000 m</span>
+        <h2 class="reveal">The Midnight Zone</h2>
+        <div class="range reveal">total darkness · living light</div>
+        <p class="reveal">No sunlight survives here — the only glow is bioluminescence. Yet researchers still pull plastic fibres from the stomachs of creatures that have never seen the sun.</p>
+        <div class="stat reveal">90%+<small>of the ocean lies below this point, in the dark</small></div>
+      </article>
+
+      <article class="zone-card right" data-zone="3">
+        <span class="tag reveal">Hadal · 4,000–11,000 m</span>
+        <h2 class="reveal">The Abyss</h2>
+        <div class="range reveal">the deepest place on Earth</div>
+        <p class="reveal">In the Mariana Trench, 11 km down, expeditions have filmed a plastic bag on the seafloor. There is no part of the ocean our footprint hasn't reached.</p>
+        <div class="stat reveal">10,935 m<small>plastic recorded at the very bottom of the trench</small></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============ OUTRO ============ -->
+  <footer class="screen outro">
+    <div>
+      <span class="kicker">SDG 14.1</span>
+      <h2>The deep remembers every choice we make at the surface.</h2>
+      <p>Prevent and significantly reduce marine pollution. Carry reusables, choose reef-safe products, and keep the pressure on policy. The descent is reversible — if we start at the top.</p>
+      <a href="#top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Rise back up ↑</a>
+    </div>
+  </footer>
+
+<script>
+/* ================================================================
+   THE DESCENT — scroll-bound path animation (vanilla JS)
+   ----------------------------------------------------------------
+   Pipeline each frame:
+     scroll position  ->  target progress (0..1 through .spine)
+     target           ->  smoothed `current` via lerp  (the "lag")
+     current          ->  bead position on the SVG path
+                       ->  trail draw-in (stroke-dashoffset)
+                       ->  background colour, depth HUD, rail, particles
+                       ->  active zone card + node pulse + bursts
+   ================================================================ */
+
+// ---- The serpentine current. Authored in the 600x1000 viewBox. ----
+const PATH_D = [
+  "M300,18",
+  "C 70,170 540,300 300,440",   // first big swing
+  "C 80,560 520,650 300,790",   // second swing
+  "C 175,880 425,930 300,985"   // settle to the floor
+].join(" ");
+
+const trail   = document.getElementById("trail");
+const trailBg = document.getElementById("trailBg");
+const bead    = document.getElementById("bead");
+const nodesG  = document.getElementById("nodes");
+const railFill= document.getElementById("railFill");
+const depthEl = document.getElementById("depth");
+const zoneNameEl = document.getElementById("zoneName");
+const spine   = document.querySelector(".spine");
+const canvas  = document.getElementById("fx");
+const ctx     = canvas.getContext("2d");
+const cards   = [...document.querySelectorAll(".zone-card")];
+
+trail.setAttribute("d", PATH_D);
+trailBg.setAttribute("d", PATH_D);
+
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Path geometry for sampling positions.
+const LEN = trail.getTotalLength();
+trail.style.strokeDasharray = LEN;
+
+// Zones: where each node sits along the path (0..1) and its identity.
+const ZONES = [
+  { p: 0.12, name: "Sunlight",  depth: 200,   accent: "#9ff7e6" },
+  { p: 0.40, name: "Twilight",  depth: 1000,  accent: "#56b8ff" },
+  { p: 0.66, name: "Midnight",  depth: 4000,  accent: "#8a7bff" },
+  { p: 0.92, name: "Abyss",     depth: 10935, accent: "#c9b8ff" },
+];
+
+// Background gradient keyframes (top + bottom colours interpolated by progress).
+const BG_STOPS = [
+  { p: 0.00, top: [47,230,200],  bottom: [10,108,143] },  // teal surface
+  { p: 0.34, top: [26,167,236],  bottom: [6,50,92]    },  // blue twilight
+  { p: 0.66, top: [106,92,255],  bottom: [20,10,69]   },  // violet midnight
+  { p: 1.00, top: [27,17,69],    bottom: [2,3,10]     },  // near-black abyss
+];
+
+// ---- Inject node markers on the path ----
+const nodeEls = ZONES.map((z) => {
+  const pt = trail.getPointAtLength(z.p * LEN);
+  const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  g.setAttribute("transform", `translate(${pt.x},${pt.y})`);
+  g.innerHTML =
+    `<circle r="14" fill="none" stroke="${z.accent}" stroke-width="1.5" opacity="0.5" class="ring"/>` +
+    `<circle r="5" fill="${z.accent}"/>`;
+  nodesG.appendChild(g);
+  return { ...z, el: g, ring: g.querySelector(".ring"), screen: null, fired: false };
+});
+
+// ---- Canvas sizing (device-pixel-ratio aware) ----
+function sizeCanvas() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  canvas.width  = innerWidth  * dpr;
+  canvas.height = innerHeight * dpr;
+  canvas.style.width  = innerWidth + "px";
+  canvas.style.height = innerHeight + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+sizeCanvas();
+addEventListener("resize", sizeCanvas);
+
+// ---- Scroll -> target progress through the spine ----
+let target = 0;
+function readProgress() {
+  const rect = spine.getBoundingClientRect();
+  const scrollable = spine.offsetHeight - innerHeight;
+  return clamp(-rect.top / scrollable, 0, 1);
+}
+addEventListener("scroll", () => { target = readProgress(); }, { passive: true });
+target = readProgress();
+
+// ---- Particle system ----
+const particles = [];
+function spawn(x, y, n, spread, life, hue) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const s = Math.random() * spread;
+    particles.push({
+      x, y,
+      vx: Math.cos(a) * s,
+      vy: Math.sin(a) * s - 0.15,   // slight upward bias, like rising motes
+      life: life * (0.6 + Math.random() * 0.6),
+      max: life,
+      r: 1 + Math.random() * 2.2,
+      hue,
+    });
+  }
+}
+
+// ---- Helpers ----
+function clamp(v, a, b) { return Math.min(Math.max(v, a), b); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+function mix(c1, c2, t) { return [
+  Math.round(lerp(c1[0], c2[0], t)),
+  Math.round(lerp(c1[1], c2[1], t)),
+  Math.round(lerp(c1[2], c2[2], t)),
+]; }
+function rgb(c) { return `rgb(${c[0]},${c[1]},${c[2]})`; }
+
+// Interpolate the two-stop background gradient for a given progress.
+function bgFor(p) {
+  for (let i = 0; i < BG_STOPS.length - 1; i++) {
+    const a = BG_STOPS[i], b = BG_STOPS[i + 1];
+    if (p <= b.p) {
+      const t = (p - a.p) / (b.p - a.p);
+      return { top: mix(a.top, b.top, t), bottom: mix(a.bottom, b.bottom, t) };
+    }
+  }
+  const last = BG_STOPS[BG_STOPS.length - 1];
+  return { top: last.top, bottom: last.bottom };
+}
+
+// ---- Main loop ----
+let current = 0;
+let lastBead = null;
+
+function frame() {
+  // 1) Smoothing — the heart of the "premium" feel. We ease `current`
+  //    toward `target` every frame, so fast scrolls glide instead of snap.
+  current = reduceMotion ? target : lerp(current, target, 0.075);
+
+  // 2) Bead position on the path (SVG user units -> direct transform).
+  const pt = trail.getPointAtLength(current * LEN);
+  bead.setAttribute("transform", `translate(${pt.x},${pt.y})`);
+
+  // 3) Draw the bright trail in behind the bead.
+  trail.style.strokeDashoffset = LEN * (1 - current);
+
+  // 4) Background tint + HUD.
+  const bg = bgFor(current);
+  document.body.style.setProperty("--bg-top", rgb(bg.top));
+  document.body.style.setProperty("--bg-bottom", rgb(bg.bottom));
+  railFill.style.height = (current * 100) + "%";
+
+  const depthM = Math.round(current * 10935);
+  depthEl.textContent = depthM.toLocaleString();
+  // name the current layer
+  let layer = "Surface";
+  if (depthM > 4000) layer = "Abyss";
+  else if (depthM > 1000) layer = "Midnight";
+  else if (depthM > 200) layer = "Twilight";
+  else if (depthM > 10) layer = "Sunlight";
+  zoneNameEl.textContent = layer;
+
+  // 5) Convert the bead's SVG point to screen-space for the canvas.
+  const m = trail.getScreenCTM();
+  const sx = pt.x * m.a + pt.y * m.c + m.e;
+  const sy = pt.x * m.b + pt.y * m.d + m.f;
+
+  // Trail particles: spawn when moving, scaled by speed.
+  if (!reduceMotion && lastBead) {
+    const speed = Math.hypot(sx - lastBead.x, sy - lastBead.y);
+    const count = Math.min(6, 1 + Math.floor(speed * 0.4));
+    spawn(sx, sy, count, 0.6, 60, 190);
+  }
+  lastBead = { x: sx, y: sy };
+
+  // 6) Node logic: pulse the nearest, fire a burst the first time we pass it.
+  nodeEls.forEach((n) => {
+    const near = Math.abs(current - n.p) < 0.05;
+    n.ring.setAttribute("opacity", near ? "1" : "0.4");
+    n.ring.setAttribute("r", near ? 20 : 14);
+    if (current >= n.p && !n.fired) {
+      n.fired = true;
+      const np = trail.getPointAtLength(n.p * LEN);
+      const bx = np.x * m.a + np.y * m.c + m.e;
+      const by = np.x * m.b + np.y * m.d + m.f;
+      spawn(bx, by, 36, 3.2, 90, 190);   // burst!
+    }
+    if (current < n.p - 0.02) n.fired = false; // re-arm when scrolling back up
+  });
+
+  // 7) Active zone card (closest node within range "owns" the screen).
+  const activeIdx = ZONES.reduce((best, z, i) =>
+    Math.abs(current - z.p) < Math.abs(current - ZONES[best].p) ? i : best, 0);
+  const showCard = current > 0.04 && current < 0.99;
+  cards.forEach((c, i) => c.classList.toggle("active", showCard && i === activeIdx));
+
+  // 8) Paint particles.
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+  ctx.globalCompositeOperation = "lighter"; // additive glow
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.life--;
+    if (p.life <= 0) { particles.splice(i, 1); continue; }
+    const a = p.life / p.max;
+    ctx.beginPath();
+    ctx.fillStyle = `hsla(${p.hue + (1 - a) * 40}, 90%, 75%, ${a * 0.9})`;
+    ctx.arc(p.x, p.y, p.r * a, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = "source-over";
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
