@@ -234,6 +234,14 @@ export default function Home() {
               <a href="#game" className="rounded-full border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-white/10">
                 Play the simulation
               </a>
+              <a
+                href="/descent.html"
+                className="group inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-gradient-to-r from-cyan-300/20 to-sky-400/15 px-5 py-3 text-sm font-semibold text-cyan-50 transition hover:-translate-y-0.5 hover:border-cyan-300/50 hover:from-cyan-300/30 hover:to-sky-400/25"
+              >
+                <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(94,234,212,0.9)]" />
+                Take the descent
+                <span className="transition group-hover:translate-x-0.5">→</span>
+              </a>
             </div>
 
             <button
