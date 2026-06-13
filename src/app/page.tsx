@@ -147,6 +147,7 @@ export default function Home() {
   const [protection, setProtection] = useState(8.4);
   const [awareness, setAwareness] = useState(42);
   const [isPosterOpen, setIsPosterOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
   const [message, setMessage] = useState(
     "The ocean is absorbing the cost of daily choices. Change the choices, change the tide.",
   );
@@ -234,6 +235,31 @@ export default function Home() {
                 Play the simulation
               </a>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setIsReportOpen(true)}
+              className="group flex w-full items-center justify-between gap-4 rounded-3xl border border-white/10 bg-[color:var(--panel)] px-5 py-4 text-left shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-cyan-300/30 hover:bg-white/8"
+              aria-label="Open the MIS Group 8 project report in an enlarged view"
+            >
+              <div className="flex items-center gap-4">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-100">
+                  <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6" aria-hidden="true">
+                    <path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                    <path d="M14 3v5h5" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                    <path d="M9 13h6M9 16h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                </span>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.28em] text-cyan-200/80">Project report</p>
+                  <p className="mt-1 text-base font-semibold text-white">MIS Group 8 — full PDF</p>
+                  <p className="mt-1 text-sm text-slate-300">Click to enlarge and read the report in the center of the screen.</p>
+                </div>
+              </div>
+              <span className="hidden rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100 transition group-hover:bg-cyan-300/20 sm:inline">
+                view
+              </span>
+            </button>
 
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {statCards.map((stat) => (
@@ -581,6 +607,47 @@ export default function Home() {
                 width={1079}
                 height={715}
                 className="max-h-[88vh] w-full object-contain"
+              />
+            </div>
+          </div>
+        ) : null}
+
+        {isReportOpen ? (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-6 backdrop-blur-md"
+            role="dialog"
+            aria-modal="true"
+            aria-label="MIS Group 8 project report viewer"
+            onClick={() => setIsReportOpen(false)}
+          >
+            <div
+              className="relative flex h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-white/15 bg-[color:var(--panel-strong)] shadow-[0_30px_120px_rgba(0,0,0,0.6)]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-4">
+                <p className="text-sm uppercase tracking-[0.28em] text-cyan-200/80">MIS Group 8 — project report</p>
+                <div className="flex items-center gap-2">
+                  <a
+                    href="/mis-group-8.pdf"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+                  >
+                    Open in new tab
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setIsReportOpen(false)}
+                    className="rounded-full border border-white/15 bg-black/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-black/60"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              <iframe
+                src="/mis-group-8.pdf"
+                title="MIS Group 8 project report"
+                className="h-full w-full flex-1 bg-white"
               />
             </div>
           </div>
